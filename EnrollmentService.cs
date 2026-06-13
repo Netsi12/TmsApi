@@ -93,3 +93,6 @@ public record EnrollmentRecord(
     string StudentId, 
     string CourseCode, 
     DateTime EnrolledAt);
+
+    //Exercise 6: The Consistent Fault (Standardized Error Handling)
+    public class TmsDatabaseException(string message) : Exception(message);
