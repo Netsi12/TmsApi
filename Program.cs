@@ -14,9 +14,17 @@ builder.Services
     .AddScheme<AuthenticationSchemeOptions, TrainingAuthHandler>("Training", null);
 builder.Services.AddAuthorization();
 
-// Services
+// enrollment service and worker
 builder.Services.AddSingleton<EnrollmentWorker>();         
 builder.Services.AddSingleton<IEnrollmentService, EnrollmentService>(); 
+
+//student service and worker
+builder.Services.AddSingleton<IStudentService, StudentService>();
+builder.Services.AddSingleton<StudentWorker>();
+
+//course service and worker
+builder.Services.AddSingleton<ICourseService, CourseService>();
+builder.Services.AddSingleton<CourseWorker>();
 
 builder.Services.AddOptions<PaymentOptions>()
     .BindConfiguration("Payments")
@@ -57,13 +65,43 @@ app.MapGet("/api/assessments/results", () => Results.Ok(new
     letterGrade = "A"
 })).RequireAuthorization();
 
+//enrollment worker test route
 app.MapGet("/api/enrollments/worker-smoke", (EnrollmentWorker worker) =>
 {
     worker.ProcessBatch();
     return Results.Ok("processed");
 });
 
+//student worker test route
+app.MapGet("/api/students/worker-smoke", (StudentWorker worker) =>
+{
+    worker.ProcessBatch();
+    return Results.Ok("processed");
+});
+
+//course worker test route
+app.MapGet("/api/courses/worker-smoke", (CourseWorker worker) =>
+{
+    worker.ProcessBatch();
+    return Results.Ok("processed");
+});
+
+//enrollment test route
 app.MapPost("/api/enrollments/test", async (IEnrollmentService service) =>
+{
+    // … your test logic …
+    return Results.Ok("Logging test completed - check console for structured logs");
+});
+
+//student test route
+app.MapPost("/api/students/test", async (IStudentService service) =>
+{
+    // … your test logic …
+    return Results.Ok("Logging test completed - check console for structured logs");
+});
+
+//course test route
+app.MapPost("/api/courses/test", async (ICourseService service) =>
 {
     // … your test logic …
     return Results.Ok("Logging test completed - check console for structured logs");
