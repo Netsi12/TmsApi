@@ -10,7 +10,8 @@ public required string RegistrationNumber { get; set; }
 public required string Name { get; set; }
 public decimal GPA { get; set; }
 public bool IsActive { get; set; } = true;
-// Navigation property for many-to-many relationship
+
+// Navigation property
 public ICollection<Enrollment> Enrollments { get; set; } = new List<Enrollment>();
 }
 

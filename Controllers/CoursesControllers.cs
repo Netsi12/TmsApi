@@ -1,36 +1,95 @@
+
 using Microsoft.AspNetCore.Mvc;
+using TmsApi.Dtos;
+using TmsApi.Services;
+
+namespace TmsApi.Controllers;
 
 [ApiController]
 [Route("api/courses")]
-public class CoursesController(ICourseService courseService) : ControllerBase
+public class CoursesController(
+    ICourseService courseService,
+    IEnrollmentService enrollmentService) : ControllerBase
 {
-    [HttpGet]
-    public async Task<IActionResult> GetAll()
+    [HttpGet("{id:int}", Name = nameof(GetCourseById))]
+    public async Task<IActionResult> GetCourseById(
+        int id,
+        CancellationToken ct)
     {
-        var courses = await courseService.GetAllAsync();
-        return Ok(courses);
-    }
+        var course = await courseService.GetByIdAsync(id, ct);
 
-    [HttpGet("{code}")]
-    public async Task<IActionResult> GetByCode(string code)
-    {
-        var record = await courseService.GetByCodeAsync(code);
-        return record is not null ? Ok(record) : NotFound();
+        return course is not null
+            ? Ok(course)
+            : NotFound();
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateCourseRequest request)
+    public async Task<IActionResult> CreateCourse(
+        CreateCourseRequest request,
+        CancellationToken ct)
     {
-        var record = await courseService.AddAsync(request.Code, request.Title);
-        return CreatedAtAction(nameof(GetByCode), new { code = record.Code }, record);
+        var exists = await courseService.CodeExistsAsync(
+            request.Code,
+            ct);
+
+        if (exists)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "Course code already exists",
+                Detail =
+                    $"A course with code '{request.Code}' is already registered.",
+                Status = StatusCodes.Status409Conflict
+            });
+        }
+
+        var result = await courseService.CreateAsync(request, ct);
+
+        return CreatedAtAction(
+            nameof(GetCourseById),
+            new { id = result.Id },
+            result);
     }
 
-    [HttpDelete("{code}")]
-    public async Task<IActionResult> Delete(string code)
+    // POST /api/courses/{courseId}/enrollments
+    [HttpPost("{courseId:int}/enrollments")]
+    public async Task<IActionResult> EnrollStudent(
+        int courseId,
+        [FromBody] EnrollStudentRequest request,
+        CancellationToken ct)
     {
-        var deleted = await courseService.DeleteAsync(code);
-        return deleted ? NoContent() : NotFound();
+        // 1. Find the course first
+        var course = await courseService.GetByIdAsync(courseId, ct);
+
+        if (course is null)
+        {
+            return NotFound();
+        }
+
+        // 2. Check capacity
+        if (course.EnrollmentCount >= course.MaxCapacity)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "Course is full",
+                Status = StatusCodes.Status409Conflict,
+                Detail =
+                    $"Course '{course.Code}' has reached its maximum capacity of {course.MaxCapacity}."
+            });
+        }
+
+        // 3. Create enrollment in the database
+        var enrollment = await enrollmentService.CreateAsync(
+            courseId,
+            request,
+            ct);
+
+        return CreatedAtAction(
+            nameof(EnrollmentsController.GetById),
+            "Enrollments",
+            new { id = enrollment.Id },
+            enrollment);
     }
 }
 
-public record CreateCourseRequest(string Code, string Title);
+
