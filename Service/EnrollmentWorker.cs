@@ -1,33 +1,39 @@
 
-// FIXED VERSION - Uses IServiceScopeFactory to avoid captive dependency
+using Microsoft.Extensions.DependencyInjection;
+using TmsApi.Services;
+
 public class EnrollmentWorker
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    
-    // SOLUTION: Inject the scope factory, not the scoped service
+
     public EnrollmentWorker(IServiceScopeFactory scopeFactory)
     {
         _scopeFactory = scopeFactory;
     }
-    
-    public void ProcessBatch()
+
+    public async Task ProcessBatchAsync(
+        CancellationToken ct = default)
     {
-        // SOLUTION: Create a short-lived scope for this operation
         using var scope = _scopeFactory.CreateScope();
-        
-        // SOLUTION: Get the scoped service from the temporary scope
-        var enrollmentService = scope.ServiceProvider.GetRequiredService<IEnrollmentService>();
-        
-        // Now use the service safely
-        var enrollments = enrollmentService.GetAllAsync().Result;
-        Console.WriteLine($"Processing {enrollments.Count} enrollments for scholarship recalculation");
-        
+
+        var enrollmentService =
+            scope.ServiceProvider
+                .GetRequiredService<IEnrollmentService>();
+
+        var enrollments =
+            await enrollmentService.GetAllAsync(ct);
+
+        Console.WriteLine(
+            $"Processing {enrollments.Count} enrollments for scholarship recalculation");
+
         foreach (var enrollment in enrollments)
         {
-            Console.WriteLine($"Recalculating scholarship for student {enrollment.StudentId} in course {enrollment.CourseCode}");
+            Console.WriteLine(
+                $"Recalculating scholarship for student " +
+                $"{enrollment.StudentId} in course " +
+                $"{enrollment.CourseId}");
         }
-        
-        // The 'using' automatically disposes the scope and its services
     }
 }
+
 

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TmsApi.Data;
-using TmsApi.Entities;
+
 
 namespace TmsApi.Controllers
 {
@@ -106,7 +106,46 @@ namespace TmsApi.Controllers
                .ToListAsync(cancellationToken);
 
            return Ok(top5Courses);
+       }  
+
+       //Part A Intentional N+1 (for learning)
+       [HttpGet("nplus1")]
+       public async Task<IActionResult> NPlus1(CancellationToken cancellationToken)
+       {
+           var students = await _context.Students.AsNoTracking().ToListAsync(cancellationToken);
+
+           foreach (var s in students)
+           {
+               var count = await _context.Enrollments
+                   .AsNoTracking()
+                   .CountAsync(e => e.StudentId == s.Id, cancellationToken);
+
+               Console.WriteLine($"{s.Name}: {count} enrollments");
+           }
+
+           return Ok("Check logs for 1 + N queries");
        }
+       //Part B Fix with shaping
+[HttpGet("shaped")]
+public async Task<IActionResult> Shaped(CancellationToken cancellationToken)
+{
+    var report = await _context.Students
+        .AsNoTracking()
+        .Select(s => new
+        {
+            s.Name,
+            EnrollmentCount = s.Enrollments.Count
+        })
+        .ToListAsync(cancellationToken);
+
+    foreach (var r in report)
+    {
+        Console.WriteLine($"{r.Name}: {r.EnrollmentCount} enrollments");
+    }
+
+    return Ok(report);
+}
+
    }
 }
 

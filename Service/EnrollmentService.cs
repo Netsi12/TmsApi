@@ -1,98 +1,129 @@
 
-public interface IEnrollmentService
+using Microsoft.EntityFrameworkCore;
+using TmsApi.Data;
+using TmsApi.Dtos;
+using TmsApi.Entities;
+
+namespace TmsApi.Services;
+
+public class EnrollmentService(
+    TmsDbContext context,
+    ILogger<EnrollmentService> logger) : IEnrollmentService
 {
-    Task<EnrollmentRecord> EnrollAsync(string studentId, string courseCode);
-    Task<EnrollmentRecord?> GetByIdAsync(string id);
-    Task<IReadOnlyList<EnrollmentRecord>> GetAllAsync();
-    Task<bool> DeleteAsync(string id);
-}
-
-// --- The in-memory implementation ---
-public class EnrollmentService : IEnrollmentService
-{
-    private readonly Dictionary<string, EnrollmentRecord> _store = new();
-    private readonly ILogger<EnrollmentService> _logger;
-
-    public EnrollmentService(ILogger<EnrollmentService> logger)
+    public async Task<EnrollmentResponseDto> CreateAsync(
+        int courseId,
+        EnrollStudentRequest request,
+        CancellationToken ct)
     {
-        _logger = logger;
-    }
+        // Find the student
+        var student = await context.Students
+            .FirstOrDefaultAsync(
+                s => s.Id == request.StudentId,
+                ct);
 
-    public Task<EnrollmentRecord> EnrollAsync(string studentId, string courseCode)
-    {
-        // Check for duplicate enrollment first
-        var existing = _store.Values
-            .FirstOrDefault(e => e.StudentId == studentId && e.CourseCode == courseCode);
-        
+        if (student is null)
+        {
+            throw new KeyNotFoundException(
+                $"Student '{request.StudentId}' was not found.");
+        }
+
+        // Find the course
+        var course = await context.Courses
+            .FirstOrDefaultAsync(
+                c => c.Id == courseId,
+                ct);
+
+        if (course is null)
+        {
+            throw new KeyNotFoundException(
+                $"Course '{courseId}' was not found.");
+        }
+
+        // Check duplicate enrollment
+        var existing = await context.Enrollments
+            .FirstOrDefaultAsync(
+                e =>
+                    e.StudentId == request.StudentId &&
+                    e.CourseId == courseId,
+                ct);
+
         if (existing is not null)
         {
-            // GOOD: Structured logging with proper log level
-            _logger.LogWarning(
-                "Duplicate enrollment attempt {StudentId} already in {CourseCode} (record {EnrollmentId})",
-                studentId, courseCode, existing.Id);
-            return Task.FromResult(existing);
+            logger.LogWarning(
+                "Duplicate enrollment attempt {StudentId} in course {CourseId}",
+                request.StudentId,
+                courseId);
+
+            return new EnrollmentResponseDto(
+                existing.Id,
+                existing.StudentId,
+                existing.CourseId,
+                existing.EnrolledAt);
         }
-        
-        var id = Guid.NewGuid().ToString("N")[..8];
-        var record = new EnrollmentRecord(id, studentId, courseCode, DateTime.UtcNow);
-        _store[id] = record;
-        
-        // GOOD: Structured logging - StudentId, CourseCode, EnrollmentId become searchable properties
-        _logger.LogInformation(
-            "Enrolled {StudentId} in {CourseCode} record {EnrollmentId}",
-            studentId, courseCode, id);
-        
-        return Task.FromResult(record);
+
+        // Create enrollment
+        var enrollment = new Enrollment
+        {
+            StudentId = request.StudentId,
+            CourseId = courseId,
+            EnrolledAt = DateTime.UtcNow
+        };
+
+        context.Enrollments.Add(enrollment);
+
+        await context.SaveChangesAsync(ct);
+
+        logger.LogInformation(
+            "Enrolled student {StudentId} in course {CourseId}, enrollment {EnrollmentId}",
+            request.StudentId,
+            courseId,
+            enrollment.Id);
+
+        return new EnrollmentResponseDto(
+            enrollment.Id,
+            enrollment.StudentId,
+            enrollment.CourseId,
+            enrollment.EnrolledAt);
     }
 
-    public Task<EnrollmentRecord?> GetByIdAsync(string id)
+    public async Task<EnrollmentResponseDto?> GetByIdAsync(
+        int courseId,
+        int id,
+        CancellationToken ct)
     {
-        _store.TryGetValue(id, out var record);
-        
-        if (record is null)
+        var enrollment = await context.Enrollments
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                e =>
+                    e.Id == id &&
+                    e.CourseId == courseId,
+                ct);
+
+        if (enrollment is null)
         {
-            // GOOD: Structured logging with appropriate log level
-            _logger.LogWarning("Enrollment {EnrollmentId} not found", id);
+            return null;
         }
-        
-        return Task.FromResult(record);
+
+        return new EnrollmentResponseDto(
+            enrollment.Id,
+            enrollment.StudentId,
+            enrollment.CourseId,
+            enrollment.EnrolledAt);
     }
 
-    public Task<IReadOnlyList<EnrollmentRecord>> GetAllAsync()
+    public async Task<IReadOnlyList<EnrollmentResponseDto>> GetAllAsync(
+        CancellationToken ct = default)
     {
-        IReadOnlyList<EnrollmentRecord> all = _store.Values.ToList();
-        
-        // GOOD: Structured logging with count as searchable property
-        _logger.LogInformation("Retrieved {EnrollmentCount} enrollment records", all.Count);
-        
-        return Task.FromResult(all);
-    }
-
-    public Task<bool> DeleteAsync(string id)
-    {
-        var removed = _store.Remove(id);
-        
-        if (removed)
-        {
-            // GOOD: Information level for successful business operation
-            _logger.LogInformation("Deleted enrollment {EnrollmentId}", id);
-        }
-        else
-        {
-            // GOOD: Warning level for expected but problematic condition
-            _logger.LogWarning("Delete failed enrollment {EnrollmentId} not found", id);
-        }
-        
-        return Task.FromResult(removed);
+        return await context.Enrollments
+            .AsNoTracking()
+            .Select(e => new EnrollmentResponseDto(
+                e.Id,
+                e.StudentId,
+                e.CourseId,
+                e.EnrolledAt))
+            .ToListAsync(ct);
     }
 }
 
-// --- The data shape (record type) ---
-public record EnrollmentRecord(
-    string Id, 
-    string StudentId, 
-    string CourseCode, 
-    DateTime EnrolledAt);
 
-    //Exercise 6: The Consistent Fault (Standardized Error Handling)
-    public class TmsDatabaseException(string message) : Exception(message);
+

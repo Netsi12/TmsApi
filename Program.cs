@@ -6,6 +6,7 @@ using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 using TmsApi.Data;
 using TmsApi.Entities;
+using TmsApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,11 +30,11 @@ builder.Services.AddAuthorization();
 
 // Services
 builder.Services.AddSingleton<EnrollmentWorker>();
-builder.Services.AddSingleton<IEnrollmentService, EnrollmentService>();
+builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
 builder.Services.AddSingleton<IStudentService, StudentService>();
 builder.Services.AddSingleton<StudentWorker>();
-builder.Services.AddSingleton<ICourseService, CourseService>();
-builder.Services.AddSingleton<CourseWorker>();
+// builder.Services.AddSingleton<CourseWorker>();
+builder.Services.AddScoped<ICourseService, CourseService>();
 
 builder.Services.AddOptions<PaymentOptions>()
     .BindConfiguration("Payments")
@@ -55,8 +56,28 @@ builder.Host.UseDefaultServiceProvider(options =>
     options.ValidateScopes = true;
     options.ValidateOnBuild = true;
 });
+builder.Services.AddProblemDetails();
+builder.Services.AddOpenApi();
+builder.Services.AddDbContext<TmsDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("TmsDatabase")));
+builder.Services.AddControllers();
 
+builder.Services.AddScoped<ICourseService, CourseService>();
 var app = builder.Build();
+
+app.UseExceptionHandler();
+app.UseStatusCodePages();
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+    app.MapScalarApiReference();
+}
+
+app.MapControllers();
+app.Run();
+
+// var app = builder.Build();
 
 // Middleware order
 app.UseMiddleware<RequestLoggingMiddleware>();
@@ -109,9 +130,9 @@ new() { RegistrationNumber = "TMS-2026-0005", Name = "EvanWright", GPA = 2.5m, I
 context.Students.AddRange(students);
 var courses = new List<Course>
 {
-new() { Code = "CS-101", Title = "Introduction to ComputerScience", Capacity = 30 },
-new() { Code = "CS-201", Title = "Data Structures and Algorithms", Capacity = 25 },
-new() { Code = "MAT-101", Title = "Calculus I", Capacity =40 }
+    new() { Code = "CS-101", Title = "Introduction to ComputerScience" },
+    new() { Code = "CS-201", Title = "Data Structures and Algorithms" },
+    new() { Code = "MAT-101", Title = "Calculus I" }
 };
 context.Courses.AddRange(courses);
 context.SaveChanges();

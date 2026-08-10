@@ -20,6 +20,8 @@ namespace TmsApi.Data.Configurations
 
             builder.HasIndex(s => s.RegistrationNumber)
                 .IsUnique();
+                 // Shadow property for audit stamp
+            builder.Property<DateTime>("LastUpdated");
         }
     }
 }

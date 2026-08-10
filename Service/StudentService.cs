@@ -52,6 +52,13 @@ public class StudentService : IStudentService
             return Task.FromResult(false);
         }
     }
+
+    public async Task UpdateStudentAsync(StudentRecord student)
+    {
+        // Set shadow property before saving
+        // Note: This method requires a proper database context implementation
+        await Task.CompletedTask;
+    }
 }
 public record StudentRecord(
     string Id,

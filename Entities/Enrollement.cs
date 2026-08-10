@@ -11,6 +11,7 @@ public decimal? Grade { get; set; }
  // Nullable, as student may be currently enrolled
 public DateTime EnrolledAt { get; set; } = DateTime.UtcNow;
 // Navigation properties back to entities
+public int Year { get; set; }
 
 
 }
