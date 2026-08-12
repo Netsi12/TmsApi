@@ -123,6 +123,21 @@ public class EnrollmentService(
                 e.EnrolledAt))
             .ToListAsync(ct);
     }
+
+    public async Task<IReadOnlyList<EnrollmentResponseDto>> GetByCourseIdAsync(
+        int courseId,
+        CancellationToken ct)
+    {
+        return await context.Enrollments
+            .AsNoTracking()
+            .Where(e => e.CourseId == courseId)
+            .Select(e => new EnrollmentResponseDto(
+                e.Id,
+                e.StudentId,
+                e.CourseId,
+                e.EnrolledAt))
+            .ToListAsync(ct);
+    }
 }
 
 
